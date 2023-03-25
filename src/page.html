@@ -1,0 +1,419 @@
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blynk Settings</title>
+</head>
+
+<body>
+    <style>
+        @keyframes button-loading {
+            20% {
+                color: transparent;
+                transform: scale(1, 1);
+            }
+
+            40% {
+                border-color: #5585ff;
+                background-color: transparent;
+                transform: scale(1, 1);
+            }
+
+            60% {
+                transform: scale(0.7, 1.1);
+                margin-left: 1.25rem;
+                width: 2.5rem;
+                text-indent: -0.6125rem;
+                color: transparent;
+                border-color: #5585ff;
+                background-color: #5585ff;
+            }
+
+            80% {
+                transform: scale(1, 1);
+            }
+
+            100% {
+                margin-left: 1.25rem;
+                width: 2.5rem;
+                background-color: #5585ff;
+                border-color: #5585ff;
+                color: transparent;
+            }
+        }
+
+        @keyframes button-dot-intro {
+            0% {
+                opacity: 0;
+            }
+
+            60% {
+                opacity: 1;
+                transform: scale(1, 1);
+            }
+
+            100% {
+                transform: scale(0.75, 0.75);
+            }
+        }
+
+        @keyframes button-dot-pulse {
+            0% {
+                opacity: 1;
+                transform: scale(0.75, 0.75);
+            }
+
+            15% {
+                transform: scale(0.85, 0.85);
+            }
+
+            45% {
+                transform: scale(0.75, 0.75);
+            }
+
+            55% {
+                transform: scale(0.95, 0.95);
+            }
+
+            85% {
+                transform: scale(0.75, 0.75);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(0.75, 0.75);
+            }
+        }
+
+        @keyframes button-ready {
+            0% {
+                margin-left: 1.25rem;
+                width: 2.5rem;
+            }
+
+            10% {
+                background-color: #5585ff;
+                border-color: #5585ff;
+            }
+
+            70% {
+                margin: 0;
+                width: 7.25rem;
+                background-color: #fff;
+                transform: scale(1.1, 1.1);
+            }
+
+            100% {
+                margin: 0;
+                width: 7rem;
+                border-color: #8cce1e;
+                background-color: #fff;
+            }
+        }
+
+        @keyframes button-dot-outro {
+            0% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0;
+                transform: scale(1, 1);
+            }
+        }
+
+        @keyframes button-ready-label {
+            0% {
+                opacity: 0;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        :root {
+            --input-color: #99a3ba;
+            --input-border: #cdd9ed;
+            --input-background: #fff;
+            --input-placeholder: #cbd1dc;
+            --input-border-focus: #275efe;
+            --group-color: var(--input-color);
+            --group-border: var(--input-border);
+            --group-background: #eef4ff;
+            --group-color-focus: #fff;
+            --group-border-focus: var(--input-border-focus);
+            --group-background-focus: #678efe;
+        }
+
+        .form-field {
+            display: block;
+            width: 100%;
+            padding: 8px 16px;
+            line-height: 25px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            border-radius: 6px;
+            -webkit-appearance: none;
+            color: var(--input-color);
+            border: 1px solid var(--input-border);
+            background: var(--input-background);
+            transition: border 0.3s ease;
+        }
+
+        .form-field::-moz-placeholder {
+            color: var(--input-placeholder);
+        }
+
+        .form-field:-ms-input-placeholder {
+            color: var(--input-placeholder);
+        }
+
+        .form-field::placeholder {
+            color: var(--input-placeholder);
+        }
+
+        .form-field:focus {
+            outline: none;
+            border-color: var(--input-border-focus);
+        }
+
+        .form-group {
+            position: relative;
+            display: flex;
+            width: 100%;
+        }
+
+        .form-group>span,
+        .form-group .form-field {
+            white-space: nowrap;
+            display: block;
+        }
+
+        .form-group>span:not(:first-child):not(:last-child),
+        .form-group .form-field:not(:first-child):not(:last-child) {
+            border-radius: 0;
+        }
+
+        .form-group>span:first-child,
+        .form-group .form-field:first-child {
+            border-radius: 6px 0 0 6px;
+        }
+
+        .form-group>span:last-child,
+        .form-group .form-field:last-child {
+            border-radius: 0 6px 6px 0;
+        }
+
+        .form-group>span:not(:first-child),
+        .form-group .form-field:not(:first-child) {
+            margin-left: -1px;
+        }
+
+        .form-group .form-field {
+            position: relative;
+            z-index: 1;
+            flex: 1 1 auto;
+            width: 1%;
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+
+        .form-group>span {
+            text-align: center;
+            padding: 8px 12px;
+            font-size: 14px;
+            line-height: 25px;
+            color: var(--group-color);
+            background: var(--group-background);
+            border: 1px solid var(--group-border);
+            transition: background 0.3s ease, border 0.3s ease, color 0.3s ease;
+        }
+
+        .form-group:focus-within>span {
+            color: var(--group-color-focus);
+            background: var(--group-background-focus);
+            border-color: var(--group-border-focus);
+        }
+
+        html {
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        * {
+            box-sizing: inherit;
+        }
+
+        *:before,
+        *:after {
+            box-sizing: inherit;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: "Mukta Malar", Arial;
+            display: flex;
+            padding-top: 50px;
+            align-items: center;
+            flex-direction: column;
+            background: #f5f9ff;
+        }
+
+        @media (min-width: 600px) {
+            body {
+                min-height: 100vh;
+                font-family: "Mukta Malar", Arial;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                flex-direction: column;
+                background: #f5f9ff;
+            }
+        }
+
+        body .form-group {
+            max-width: 500px;
+        }
+
+        body .form-group:not(:last-child) {
+            margin-bottom: 32px;
+        }
+
+        button {
+            position: relative;
+            overflow: hidden;
+            width: 7rem;
+            color: #5585ff;
+            border: 2px solid #5585ff;
+            background-color: transparent;
+            cursor: pointer;
+            line-height: 2;
+            margin: 0;
+            padding: 0;
+            border-radius: 6px;
+            font-size: 1.125rem;
+            text-transform: lowercase;
+            outline: none;
+            transition: transform 0.125s;
+        }
+
+        button:active {
+            transform: scale(0.9, 0.9);
+        }
+
+        button:before,
+        button:after {
+            position: absolute;
+            opacity: 0;
+            border-radius: 50%;
+            background-color: #fff;
+            top: 50%;
+            left: 50%;
+            margin-top: -1.125rem;
+            margin-left: -1.125rem;
+            width: 2.25rem;
+            height: 2.25rem;
+            content: "";
+            z-index: 1;
+        }
+
+        button.loading {
+            animation: button-loading 0.5s forwards;
+        }
+
+        button.loading:before {
+            opacity: 1;
+            animation: button-dot-intro 0.5s forwards;
+        }
+
+        button.loading:after {
+            opacity: 0;
+            animation: button-dot-pulse 1.5s infinite 0.5s;
+        }
+
+        button.ready {
+            text-indent: 0;
+            color: transparent;
+            background-color: #5585ff;
+            animation: button-ready 0.333s forwards;
+        }
+
+        button.ready:before {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: auto;
+            margin: 0;
+            width: auto;
+            height: auto;
+            border-radius: 0;
+            background-color: transparent;
+            color: #8cce1e;
+            content: "success";
+            opacity: 0;
+            z-index: 2;
+            animation: button-ready-label 0.5s forwards 0.275s;
+        }
+
+        button.ready:after {
+            opacity: 1;
+            animation: button-dot-outro 0.333s;
+        }
+    </style>
+
+    <div class="form-group">
+        <span>Blynk token</span>
+        <input id='token' name='token' class="form-field" type="text" placeholder="type here..."
+            style="margin-right: 5px; min-width: 250px;">
+    </div>
+    <button onclick="submit_F(this)" type="submit">Save</button>
+
+    <script>
+
+        document.addEventListener("DOMContentLoaded", function (event) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/token');
+            xhr.onload = function () {
+                if (xhr.status === 200) {
+                    let res = JSON.parse(xhr.responseText);
+                    document.getElementById('token').value = res.token;
+                }
+            };
+
+            // Send
+            xhr.send();
+        });
+
+        function submit_F(obj) {
+            obj.className = 'loading';
+            setTimeout(function () {
+                save();
+            }, 200);
+        }
+
+        function save() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/login');
+            // Set callback action
+            xhr.onload = function () {
+                if (xhr.status === 200) {
+                    document.querySelector('button').className = 'ready';
+                } else {
+                    document.querySelector('button').className = '';
+                    alert('Save failed!');
+                }
+            };
+
+            // Send
+            const formData = new FormData();
+            formData.append("token", document.getElementById('token').value);
+            xhr.send(formData);
+        }
+    </script>
+</body>
+
+</html>
