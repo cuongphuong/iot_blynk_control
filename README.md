@@ -3,3 +3,5 @@
 Device NodeMCU v1.0
 
 Setting Blynk config with Wifi Access Point and control device by Blynk app.
+
+Config and run with PlatformIO
