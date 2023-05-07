@@ -17,6 +17,78 @@ ESP8266WebServer server(80);
 WiFiManager wifiManager;
 Preferences preferences;
 
+// Variable config
+int button_s1 = D5;
+int button_s2 = D6;
+int button_s3 = D7;
+
+int device_s1 = D1;
+int device_s2 = D2;
+int device_s3 = D8;
+
+// button value
+int button_s1_value = 0;
+int button_s2_value = 0;
+int button_s3_value = 0;
+
+// Config button state
+int button_s1_state = 1;
+int button_s1_last_state = 1;
+
+int button_s2_state = 1;
+int button_s2_last_state = 1;
+
+int button_s3_state = 1;
+int button_s3_last_state = 1;
+
+/** Write data for device_d1 = V1 */
+BLYNK_WRITE(1)
+{
+  int pinValue = param.asInt();
+  if (pinValue == 1)
+  {
+    Serial.println("ON");
+    digitalWrite(device_s1, HIGH);
+  }
+  else
+  {
+    Serial.println("OFF");
+    digitalWrite(device_s1, LOW);
+  }
+}
+
+/** Write data for device_s2 = V2 */
+BLYNK_WRITE(2)
+{
+  int pinValue = param.asInt();
+  if (pinValue == 1)
+  {
+    Serial.println("ON");
+    digitalWrite(device_s2, HIGH);
+  }
+  else
+  {
+    Serial.println("OFF");
+    digitalWrite(device_s2, LOW);
+  }
+}
+
+/** Write data for device_s3 = V3 */
+BLYNK_WRITE(3)
+{
+  int pinValue = param.asInt();
+  if (pinValue == 1)
+  {
+    Serial.println("ON");
+    digitalWrite(device_s3, HIGH);
+  }
+  else
+  {
+    Serial.println("OFF");
+    digitalWrite(device_s3, LOW);
+  }
+}
+
 void configBlynk()
 {
   // Get blynk token
@@ -26,8 +98,14 @@ void configBlynk()
   // Start Blynk
   Blynk.begin(myToken.c_str(), WiFi.SSID().c_str(), WiFi.psk().c_str());
 
-  // Default set of led
+    // Default set of led
   digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(device_s1, LOW);
+  digitalWrite(device_s2, LOW);
+  digitalWrite(device_s3, LOW);
+  Blynk.virtualWrite(V1, 0);
+  Blynk.virtualWrite(V2, 0);
+  Blynk.virtualWrite(V3, 0);
 
   // Change status
   hasBkynkConfig = true;
@@ -37,7 +115,14 @@ void setup()
 {
   Serial.begin(115200);
   pinMode(buttonPin, INPUT_PULLUP);
+  pinMode(button_s1, INPUT_PULLUP);
+  pinMode(button_s2, INPUT_PULLUP);
+  pinMode(button_s3, INPUT_PULLUP);
+
   pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(device_s1, OUTPUT);
+  pinMode(device_s2, OUTPUT);
+  pinMode(device_s3, OUTPUT);
 
   // Reset cấu hình wifi trước đó (nếu có)
   wifiManager.resetSettings();
@@ -47,9 +132,83 @@ void setup()
   preferences.begin("NODEMCU", false);
 }
 
+void pressButtonS1()
+{
+  button_s1_state = digitalRead(button_s1);
+  if (button_s1_state == HIGH && button_s1_last_state == LOW)
+  {
+    if (button_s1_value == 1)
+    {
+      button_s1_value = 0;
+      digitalWrite(device_s1, LOW);
+    }
+    else
+    {
+      button_s1_value = 1;
+      digitalWrite(device_s1, HIGH);
+    }
+
+    Blynk.virtualWrite(V1, button_s1_value);
+  }
+
+  button_s1_last_state = button_s1_state;
+}
+
+void pressButtonS2()
+{
+  button_s2_state = digitalRead(button_s2);
+  if (button_s2_state == HIGH && button_s2_last_state == LOW)
+  {
+    if (button_s2_value == 1)
+    {
+      button_s2_value = 0;
+      digitalWrite(device_s2, LOW);
+    }
+    else
+    {
+      button_s2_value = 1;
+      digitalWrite(device_s2, HIGH);
+    }
+
+    Blynk.virtualWrite(V2, button_s2_value);
+  }
+
+  button_s2_last_state = button_s2_state;
+}
+
+void pressButtonS3()
+{
+  button_s3_state = digitalRead(button_s3);
+  if (button_s3_state == HIGH && button_s3_last_state == LOW)
+  {
+    if (button_s3_value == 1)
+    {
+      button_s3_value = 0;
+      digitalWrite(device_s3, LOW);
+    }
+    else
+    {
+      button_s3_value = 1;
+      digitalWrite(device_s3, HIGH);
+    }
+
+    Blynk.virtualWrite(V3, button_s3_value);
+  }
+
+  button_s3_last_state = button_s3_state;
+}
+
+void readButtonValue()
+{
+  pressButtonS1();
+  pressButtonS2();
+  pressButtonS3();
+}
+
 void mainLoop()
 {
   Blynk.run();
+  readButtonValue();
 }
 
 void handleRoot()
