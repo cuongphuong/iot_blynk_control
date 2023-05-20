@@ -6,12 +6,16 @@
 #include <Preferences.h>
 #include <BlynkSimpleEsp8266.h>
 
+int buttonInput1 = D7;
 const int buttonPin = 0;       // GPIO0 - D3
-int buttonState = 0;           // Current state of the button
-int lastButtonState = 0;       // Previous state of the button
+int setupButtonState = 0;      // Current state of the button
+int setUpLastButtonState = 0;  // Previous state of the button
 unsigned long buttonPressTime; // Time the button was pressed
 bool leftConfigMode = true;
 bool hasBkynkConfig = false;
+
+// Status
+bool relayStatus = false;
 
 ESP8266WebServer server(80);
 WiFiManager wifiManager;
@@ -31,12 +35,17 @@ void configBlynk()
 
   // Change status
   hasBkynkConfig = true;
+
+  // Chuyển trạng thái sang off
+  Blynk.virtualWrite(V0, LOW);
 }
 
 void setup()
 {
   Serial.begin(115200);
   pinMode(buttonPin, INPUT_PULLUP);
+  pinMode(D5, OUTPUT);
+  pinMode(D7, INPUT_PULLUP);
   pinMode(LED_BUILTIN, OUTPUT);
 
   // Reset cấu hình wifi trước đó (nếu có)
@@ -47,9 +56,35 @@ void setup()
   preferences.begin("NODEMCU", false);
 }
 
+int lastButtonState = HIGH;
+void checkButton1()
+{
+  // Button was just pressed
+  int button1State = digitalRead(buttonInput1);
+  if (button1State == LOW && lastButtonState == HIGH)
+  {
+    relayStatus = !relayStatus;
+    Serial.println("Clicked");
+
+    if (relayStatus)
+    {
+      digitalWrite(D5, HIGH);
+      Blynk.virtualWrite(V0, HIGH);
+    }
+    else
+    {
+      digitalWrite(D5, LOW);
+      Blynk.virtualWrite(V0, LOW);
+    }
+  }
+  lastButtonState = button1State;
+  delay(200);
+}
+
 void mainLoop()
 {
   Blynk.run();
+  checkButton1();
 }
 
 void handleRoot()
@@ -119,14 +154,14 @@ void setupInfomation()
 
 void loop()
 {
-  buttonState = digitalRead(buttonPin);
+  setupButtonState = digitalRead(buttonPin);
 
   // Button was just pressed
-  if (buttonState == LOW && lastButtonState == HIGH)
+  if (setupButtonState == LOW && setUpLastButtonState == HIGH)
   {
     buttonPressTime = millis();
   }
-  else if (buttonState == LOW && lastButtonState == LOW)
+  else if (setupButtonState == LOW && setUpLastButtonState == LOW)
   {
     // Button is being held down
     if (millis() - buttonPressTime > 1500)
@@ -137,7 +172,7 @@ void loop()
       setupInfomation();
     }
   }
-  else if (buttonState == HIGH && lastButtonState == LOW)
+  else if (setupButtonState == HIGH && setUpLastButtonState == LOW)
   {
     // Button was just released
     // Do something here if necessary
@@ -155,5 +190,23 @@ void loop()
   }
 
   // Remember the current button state for the next loop
-  lastButtonState = buttonState;
+  setUpLastButtonState = setupButtonState;
+}
+
+/**
+ * Ghi giá trị chân D5 qua Blynk với Vitual Pin
+ */
+BLYNK_WRITE(V0)
+{
+  Serial.println(param.asInt());
+  if (param.asInt())
+  {
+    digitalWrite(D5, HIGH);
+    relayStatus = true;
+  }
+  else
+  {
+    digitalWrite(D5, LOW);
+    relayStatus = false;
+  }
 }
