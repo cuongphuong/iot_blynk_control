@@ -25,7 +25,7 @@ const long interval = 120 * 60 * 1000; // Khoảng thời gian tính bằng mili
 
 // Config check intenet
 unsigned long previousInteMillis = 0;
-long intervalInte = 30000;
+const long intervalInte = 30000;
 
 // Device PIN
 int device1 = D1;
@@ -294,6 +294,9 @@ bool configBlynk()
   // Show info
   Serial.println(WiFi.localIP());
 
+  // Check connect wifi
+  hasConnectedToInternet();
+
   // Start Blynk
   if (hasConnectedInternet)
     Blynk.begin(myToken.c_str(), WiFi.SSID().c_str(), WiFi.psk().c_str());
@@ -524,7 +527,7 @@ void loop()
   if (currentMillis - previousInteMillis > intervalInte)
   {
     // Turn on led
-    digitalWrite(LED_BUILTIN, HIGH);
+    digitalWrite(LED_BUILTIN, LOW);
     previousInteMillis = currentMillis;
 
     // Get status connect
@@ -540,6 +543,9 @@ void loop()
 
     // Set status last check connect
     lastConnectInternetStatus = hasConnectedInternet;
+
+    // Turn off led
+    digitalWrite(LED_BUILTIN, HIGH);
   }
 
   // Send system data
