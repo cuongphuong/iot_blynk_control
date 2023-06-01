@@ -417,7 +417,9 @@ void handlePressButton()
 
 void mainProcess()
 {
-  Blynk.run();
+  if (hasConnectedInternet)
+    Blynk.run();
+
   handlePressButton();
 }
 
