@@ -5,13 +5,10 @@
 #include <WiFiManager.h>
 #include <Preferences.h>
 #include <BlynkSimpleEsp8266.h>
-#include <ESP8266HTTPClient.h>
 
 // Using for check config finished
 bool settingFlg = false;
 bool bkynkSettingFlg = false;
-bool lastConnectInternetStatus = false;
-bool hasConnectedInternet = false;
 
 // Config button state
 const int buttonPin = D3;      // GPIO0 - D3
@@ -20,12 +17,8 @@ int setUpLastButtonState = 0;  // Previous state of the button
 unsigned long buttonPressTime; // Time the button was pressed
 
 // Config auto reset
-unsigned long previousMillis = 0;      // Biến lưu trữ thời điểm trước đó
-const long interval = 120 * 60 * 1000; // Khoảng thời gian tính bằng miliseconds (2 giờ)
-
-// Config check intenet
-unsigned long previousInteMillis = 0;
-long intervalInte = 30000;
+unsigned long previousMillis = 0; // Biến lưu trữ thời điểm trước đó
+const long interval = 7200000;    // Khoảng thời gian tính bằng miliseconds (2 giờ)
 
 // Device PIN
 int device1 = D1;
@@ -51,20 +44,6 @@ int lastButton3State = HIGH;
 ESP8266WebServer server(80);
 WiFiManager wifiManager;
 Preferences preferences;
-HTTPClient http;
-WiFiClient wifiClient;
-
-/**
- * Check hasConnected to internet
- */
-void hasConnectedToInternet()
-{
-  http.begin(wifiClient, "http://www.google.com");
-  int httpCode = http.GET();
-  Serial.print("Status: ");
-  Serial.println(httpCode);
-  hasConnectedInternet = httpCode > 0;
-}
 
 /**
  * API GET "/"
@@ -114,25 +93,30 @@ void saveConfigInfo()
   }
 }
 
+BLYNK_DISCONNECTED()
+{
+  Serial.println("Lost connection to Blynk server");
+  while (!Blynk.connected())
+  {
+    Serial.println("Attempting to reconnect to Blynk server...");
+    Blynk.connect();
+    delay(5000);
+  }
+}
+
 BLYNK_WRITE(V1)
 {
   if (param.asInt())
   {
+    Serial.println("D1 ON");
     digitalWrite(device1, HIGH);
     lastDevice1State = true;
-    Serial.println("D1 ON");
-
-    if (hasConnectedInternet)
-      Blynk.virtualWrite(V6, "D1 ON");
   }
   else
   {
+    Serial.println("D1 OFF");
     digitalWrite(device1, LOW);
     lastDevice1State = false;
-    Serial.println("D1 OFF");
-
-    if (hasConnectedInternet)
-      Blynk.virtualWrite(V6, "D1 OFF");
   }
 }
 
@@ -140,21 +124,15 @@ BLYNK_WRITE(V2)
 {
   if (param.asInt())
   {
+    Serial.println("D2 ON");
     digitalWrite(device2, HIGH);
     lastDevice2State = true;
-    Serial.println("D2 ON");
-
-    if (hasConnectedInternet)
-      Blynk.virtualWrite(V6, "D2 ON");
   }
   else
   {
+    Serial.println("D2 OFF");
     digitalWrite(device2, LOW);
     lastDevice2State = false;
-    Serial.println("D2 OFF");
-
-    if (hasConnectedInternet)
-      Blynk.virtualWrite(V6, "D2 OFF");
   }
 }
 
@@ -162,21 +140,15 @@ BLYNK_WRITE(V3)
 {
   if (param.asInt())
   {
+    Serial.println("D3 ON");
     digitalWrite(device3, HIGH);
     lastDevice3State = true;
-    Serial.println("D3 ON");
-
-    if (hasConnectedInternet)
-      Blynk.virtualWrite(V6, "D3 ON");
   }
   else
   {
+    Serial.println("D3 OFF");
     digitalWrite(device3, LOW);
     lastDevice3State = false;
-    Serial.println("D3 OFF");
-
-    if (hasConnectedInternet)
-      Blynk.virtualWrite(V6, "D3 OFF");
   }
 }
 
@@ -204,7 +176,6 @@ void setupInfomation()
   server.on("/save", HTTP_POST, saveConfigInfo);
   server.begin();
 
-  int startTime = millis();
   while (true)
   {
     server.handleClient();
@@ -218,16 +189,6 @@ void setupInfomation()
     {
       break;
     }
-
-    // Tự thoát mode config sau 2p
-    if (millis() - startTime > 120000)
-    {
-
-      if (hasConnectedInternet)
-        Blynk.virtualWrite(V6, "Auto exit setup mode...");
-
-      ESP.reset(); // Thực hiện reset
-    }
   }
 }
 
@@ -237,7 +198,7 @@ bool checkConnectWifi()
   String username = preferences.getString("username", "undefined");
   String pass = preferences.getString("pass", "undefined");
 
-  Serial.println("Cache info: " + username + "/" + pass + "/" + myToken);
+  Serial.println("Info..." + username + "/" + pass + "/" + myToken);
 
   WiFi.begin(username, pass);
 
@@ -255,23 +216,6 @@ bool checkConnectWifi()
   }
 
   return true;
-}
-
-/**
- * Try to connect Blynk
- */
-void reconnectBlynk()
-{
-  // Disconect
-  Blynk.disconnect();
-
-  // Get blynk token
-  String myToken = preferences.getString("token", "undefined");
-  String username = preferences.getString("username", "undefined");
-  String pass = preferences.getString("pass", "undefined");
-
-  // Re connect
-  Blynk.begin(myToken.c_str(), WiFi.SSID().c_str(), WiFi.psk().c_str());
 }
 
 /**
@@ -295,22 +239,18 @@ bool configBlynk()
   Serial.println(WiFi.localIP());
 
   // Start Blynk
-  if (hasConnectedInternet)
-    Blynk.begin(myToken.c_str(), WiFi.SSID().c_str(), WiFi.psk().c_str());
+  Blynk.begin(myToken.c_str(), WiFi.SSID().c_str(), WiFi.psk().c_str());
 
   // Default set of led
   digitalWrite(LED_BUILTIN, HIGH);
 
-  // Change state of 3 PIN to off
-  if (hasConnectedInternet)
-  {
-    Blynk.virtualWrite(V3, LOW);
-    Blynk.virtualWrite(V1, LOW);
-    Blynk.virtualWrite(V2, LOW);
-  }
-
   // Change status
   bkynkSettingFlg = true;
+
+  // Change state of 3 PIN to off
+  Blynk.virtualWrite(V3, LOW);
+  Blynk.virtualWrite(V1, LOW);
+  Blynk.virtualWrite(V2, LOW);
 
   return true;
 }
@@ -325,22 +265,12 @@ void handleButton1()
     if (lastDevice1State)
     {
       digitalWrite(device1, HIGH);
-
-      if (hasConnectedInternet)
-      {
-        Blynk.virtualWrite(V1, HIGH);
-        Blynk.virtualWrite(V6, "D1 ON");
-      }
+      Blynk.virtualWrite(V0, HIGH);
     }
     else
     {
       digitalWrite(device1, LOW);
-
-      if (hasConnectedInternet)
-      {
-        Blynk.virtualWrite(V1, LOW);
-        Blynk.virtualWrite(V6, "D1 OFF");
-      }
+      Blynk.virtualWrite(V0, LOW);
     }
   }
   lastButton1State = button1Input;
@@ -356,22 +286,12 @@ void handleButton2()
     if (lastDevice2State)
     {
       digitalWrite(device2, HIGH);
-
-      if (hasConnectedInternet)
-      {
-        Blynk.virtualWrite(V2, HIGH);
-        Blynk.virtualWrite(V6, "D2 ON");
-      }
+      Blynk.virtualWrite(V1, HIGH);
     }
     else
     {
       digitalWrite(device2, LOW);
-
-      if (hasConnectedInternet)
-      {
-        Blynk.virtualWrite(V2, LOW);
-        Blynk.virtualWrite(V6, "D2 OFF");
-      }
+      Blynk.virtualWrite(V1, LOW);
     }
   }
   lastButton2State = button2Input;
@@ -387,22 +307,12 @@ void handleButton3()
     if (lastDevice3State)
     {
       digitalWrite(device3, HIGH);
-
-      if (hasConnectedInternet)
-      {
-        Blynk.virtualWrite(V3, HIGH);
-        Blynk.virtualWrite(V6, "D3 ON");
-      }
+      Blynk.virtualWrite(V2, HIGH);
     }
     else
     {
       digitalWrite(device3, LOW);
-
-      if (hasConnectedInternet)
-      {
-        Blynk.virtualWrite(V3, LOW);
-        Blynk.virtualWrite(V6, "D3 OFF");
-      }
+      Blynk.virtualWrite(V2, LOW);
     }
   }
   lastButton3State = button3Input;
@@ -415,7 +325,7 @@ void handlePressButton()
   handleButton3();
 }
 
-void mainProcess()
+void mainLoop()
 {
   Blynk.run();
   handlePressButton();
@@ -430,9 +340,6 @@ void run()
   {
     buttonPressTime = millis();
     Serial.println("Presss button...");
-
-    if (hasConnectedInternet)
-      Blynk.virtualWrite(V6, "Presss button...");
   }
   else if ((setupButtonState == LOW && setUpLastButtonState == LOW) || !settingFlg)
   {
@@ -440,9 +347,6 @@ void run()
     if (millis() - buttonPressTime > 1500 || !settingFlg)
     {
       // Config user infomation
-      if (hasConnectedInternet)
-        Blynk.virtualWrite(V6, "Setup mode...");
-
       Serial.println("Setup mode...");
       setupInfomation();
     }
@@ -459,19 +363,15 @@ void run()
       {
         settingFlg = true;
         Serial.println("Config successfully.");
-
-        if (hasConnectedInternet)
-          Blynk.virtualWrite(V6, "Config successfully.");
       }
       else
       {
         settingFlg = false;
-        delay(10000);
         return;
       }
     }
 
-    mainProcess();
+    mainLoop();
   }
 
   // Remember the current button state for the next loop
@@ -498,61 +398,26 @@ void setup()
   pinMode(button2, INPUT_PULLUP);
   pinMode(button3, INPUT_PULLUP);
 
-  // Check cache config infomation
-  String myToken = preferences.getString("token", "undefined");
-  String username = preferences.getString("username", "undefined");
-  String pass = preferences.getString("pass", "undefined");
-
-  // Pass setting info
-  if (myToken != "undefined" && username != "undefined" && pass != "undefined")
+  if (!checkConnectWifi())
+  {
+    settingFlg = false;
+    Serial.println("Check connect fail.");
+  }
+  else
   {
     settingFlg = true;
+    Serial.println("Check connect success...");
   }
 }
 
 void loop()
 {
-  Serial.println("Running...");
   run();
 
-  // Get time running
-  unsigned long currentMillis = millis();
-
-  // Check connect intenet
-  if (currentMillis - previousInteMillis > intervalInte)
-  {
-    // Turn on led
-    digitalWrite(LED_BUILTIN, HIGH);
-    previousInteMillis = currentMillis;
-
-    // Get status connect
-    Serial.println("Check connect intenet...");
-    hasConnectedToInternet();
-
-    // Re-connect if fail
-    if (hasConnectedInternet && !lastConnectInternetStatus)
-    {
-      Serial.println("Re-connect to Blynk cloud...");
-      reconnectBlynk();
-    }
-
-    // Set status last check connect
-    lastConnectInternetStatus = hasConnectedInternet;
-  }
-
-  // Send system data
-  int freeHeapKb = ESP.getFreeHeap() / 1024;
-
-  if (hasConnectedInternet)
-  {
-    Blynk.virtualWrite(V5, currentMillis / 1000);
-    Blynk.virtualWrite(V7, freeHeapKb);
-  }
-
   // Check reset
-  if ((currentMillis - previousMillis >= interval) || freeHeapKb <= 5)
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval)
   {
-    Serial.println("Reset.");
     ESP.reset(); // Thực hiện reset
   }
 }
