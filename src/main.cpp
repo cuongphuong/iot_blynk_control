@@ -5,230 +5,134 @@
 #include <WiFiManager.h>
 #include <Preferences.h>
 #include <BlynkSimpleEsp8266.h>
+#include <ESP8266HTTPClient.h>
 
-const int buttonPin = 0;       // GPIO0 - D3
-int buttonState = 0;           // Current state of the button
-int lastButtonState = 0;       // Previous state of the button
+// Using for check config finished
+bool settingFlg = false;
+bool bkynkSettingFlg = false;
+bool lastConnectInternetStatus = true;
+bool hasConnectedInternet = false;
+
+// Config button state
+const int buttonPin = D3;      // GPIO0 - D3
+int setupButtonState = 0;      // Current state of the button
+int setUpLastButtonState = 0;  // Previous state of the button
 unsigned long buttonPressTime; // Time the button was pressed
-bool leftConfigMode = true;
-bool hasBkynkConfig = false;
 
+// Config auto reset
+unsigned long previousMillis = 0;          // Biến lưu trữ thời điểm trước đó
+const long interval = 120 * 60 * 1000;     // Khoảng thời gian tính bằng miliseconds (2 giờ)
+const long intervalNoti = 119 * 60 * 1000; // Thời gian cảnh báo
+
+// Config check intenet
+unsigned long previousInteMillis = 0;
+const long intervalInte = 30000;
+
+// Device PIN
+int device1 = D1;
+int device2 = D2;
+int device3 = D8;
+
+// Device state
+bool lastDevice1State = LOW;
+bool lastDevice2State = LOW;
+bool lastDevice3State = LOW;
+
+// Button PIN
+int button1 = D5;
+int button2 = D6;
+int button3 = D7;
+
+// Button state
+int lastButton1State = HIGH;
+int lastButton2State = HIGH;
+int lastButton3State = HIGH;
+
+// Service management
 ESP8266WebServer server(80);
 WiFiManager wifiManager;
 Preferences preferences;
+HTTPClient http;
+WiFiClient wifiClient;
 
-// Variable config
-int button_s1 = D5;
-int button_s2 = D6;
-int button_s3 = D7;
-
-int device_s1 = D1;
-int device_s2 = D2;
-int device_s3 = D8;
-
-// button value
-int button_s1_value = 0;
-int button_s2_value = 0;
-int button_s3_value = 0;
-
-// Config button state
-int button_s1_state = 1;
-int button_s1_last_state = 1;
-
-int button_s2_state = 1;
-int button_s2_last_state = 1;
-
-int button_s3_state = 1;
-int button_s3_last_state = 1;
-
-/** Write data for device_d1 = V1 */
-BLYNK_WRITE(1)
+/**
+ * Check hasConnected to internet
+ */
+bool hasConnectedToInternet()
 {
-  int pinValue = param.asInt();
-  if (pinValue == 1)
+  // Gửi yêu cầu GET đến máy chủ Blynk Cloud
+  if (http.begin(wifiClient, "http://www.google.com"))
   {
-    Serial.println("ON");
-    digitalWrite(device_s1, HIGH);
-  }
-  else
-  {
-    Serial.println("OFF");
-    digitalWrite(device_s1, LOW);
-  }
-}
+    int httpCode = http.GET();
 
-/** Write data for device_s2 = V2 */
-BLYNK_WRITE(2)
-{
-  int pinValue = param.asInt();
-  if (pinValue == 1)
-  {
-    Serial.println("ON");
-    digitalWrite(device_s2, HIGH);
-  }
-  else
-  {
-    Serial.println("OFF");
-    digitalWrite(device_s2, LOW);
-  }
-}
-
-/** Write data for device_s3 = V3 */
-BLYNK_WRITE(3)
-{
-  int pinValue = param.asInt();
-  if (pinValue == 1)
-  {
-    Serial.println("ON");
-    digitalWrite(device_s3, HIGH);
-  }
-  else
-  {
-    Serial.println("OFF");
-    digitalWrite(device_s3, LOW);
-  }
-}
-
-void configBlynk()
-{
-  // Get blynk token
-  String myToken = preferences.getString("token", "undefined");
-  Serial.println("Your token: " + myToken);
-
-  // Start Blynk
-  Blynk.begin(myToken.c_str(), WiFi.SSID().c_str(), WiFi.psk().c_str());
-
-    // Default set of led
-  digitalWrite(LED_BUILTIN, HIGH);
-  digitalWrite(device_s1, LOW);
-  digitalWrite(device_s2, LOW);
-  digitalWrite(device_s3, LOW);
-  Blynk.virtualWrite(V1, 0);
-  Blynk.virtualWrite(V2, 0);
-  Blynk.virtualWrite(V3, 0);
-
-  // Change status
-  hasBkynkConfig = true;
-}
-
-void setup()
-{
-  Serial.begin(115200);
-  pinMode(buttonPin, INPUT_PULLUP);
-  pinMode(button_s1, INPUT_PULLUP);
-  pinMode(button_s2, INPUT_PULLUP);
-  pinMode(button_s3, INPUT_PULLUP);
-
-  pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(device_s1, OUTPUT);
-  pinMode(device_s2, OUTPUT);
-  pinMode(device_s3, OUTPUT);
-
-  // Reset cấu hình wifi trước đó (nếu có)
-  wifiManager.resetSettings();
-  wifiManager.autoConnect("NodeMCU");
-
-  // start cache config
-  preferences.begin("NODEMCU", false);
-}
-
-void pressButtonS1()
-{
-  button_s1_state = digitalRead(button_s1);
-  if (button_s1_state == HIGH && button_s1_last_state == LOW)
-  {
-    if (button_s1_value == 1)
+    // Kiểm tra mã trạng thái HTTP
+    if (httpCode == HTTP_CODE_OK)
     {
-      button_s1_value = 0;
-      digitalWrite(device_s1, LOW);
+      Serial.println("[HTTP] Connected to internet");
+      http.end();
+
+      hasConnectedInternet = true;
+      return true;
     }
     else
     {
-      button_s1_value = 1;
-      digitalWrite(device_s1, HIGH);
+      hasConnectedInternet = false;
+      Serial.printf("[HTTP] Failed, error: %s\n", http.errorToString(httpCode).c_str());
     }
-
-    Blynk.virtualWrite(V1, button_s1_value);
+    http.end();
   }
-
-  button_s1_last_state = button_s1_state;
-}
-
-void pressButtonS2()
-{
-  button_s2_state = digitalRead(button_s2);
-  if (button_s2_state == HIGH && button_s2_last_state == LOW)
+  else
   {
-    if (button_s2_value == 1)
-    {
-      button_s2_value = 0;
-      digitalWrite(device_s2, LOW);
-    }
-    else
-    {
-      button_s2_value = 1;
-      digitalWrite(device_s2, HIGH);
-    }
-
-    Blynk.virtualWrite(V2, button_s2_value);
+    Serial.println("[HTTP] Unable to connect");
   }
 
-  button_s2_last_state = button_s2_state;
+  return false;
 }
 
-void pressButtonS3()
+/**
+ * API GET "/"
+ * Display setting page
+ */
+void webHome()
 {
-  button_s3_state = digitalRead(button_s3);
-  if (button_s3_state == HIGH && button_s3_last_state == LOW)
-  {
-    if (button_s3_value == 1)
-    {
-      button_s3_value = 0;
-      digitalWrite(device_s3, LOW);
-    }
-    else
-    {
-      button_s3_value = 1;
-      digitalWrite(device_s3, HIGH);
-    }
-
-    Blynk.virtualWrite(V3, button_s3_value);
-  }
-
-  button_s3_last_state = button_s3_state;
-}
-
-void readButtonValue()
-{
-  pressButtonS1();
-  pressButtonS2();
-  pressButtonS3();
-}
-
-void mainLoop()
-{
-  Blynk.run();
-  readButtonValue();
-}
-
-void handleRoot()
-{
-  String html = "<html lang=en><meta charset=UTF-8><meta content=\"IE=edge\"http-equiv=X-UA-Compatible><meta content=\"width=device-width,initial-scale=1\"name=viewport><title>Blynk Settings</title><body><style>@keyframes button-loading{20%{color:transparent;transform:scale(1,1)}40%{border-color:#5585ff;background-color:transparent;transform:scale(1,1)}60%{transform:scale(.7,1.1);margin-left:1.25rem;width:2.5rem;text-indent:-.6125rem;color:transparent;border-color:#5585ff;background-color:#5585ff}80%{transform:scale(1,1)}100%{margin-left:1.25rem;width:2.5rem;background-color:#5585ff;border-color:#5585ff;color:transparent}}@keyframes button-dot-intro{0%{opacity:0}60%{opacity:1;transform:scale(1,1)}100%{transform:scale(.75,.75)}}@keyframes button-dot-pulse{0%{opacity:1;transform:scale(.75,.75)}15%{transform:scale(.85,.85)}45%{transform:scale(.75,.75)}55%{transform:scale(.95,.95)}85%{transform:scale(.75,.75)}100%{opacity:1;transform:scale(.75,.75)}}@keyframes button-ready{0%{margin-left:1.25rem;width:2.5rem}10%{background-color:#5585ff;border-color:#5585ff}70%{margin:0;width:7.25rem;background-color:#fff;transform:scale(1.1,1.1)}100%{margin:0;width:7rem;border-color:#8cce1e;background-color:#fff}}@keyframes button-dot-outro{0%{opacity:1}100%{opacity:0;transform:scale(1,1)}}@keyframes button-ready-label{0%{opacity:0}100%{opacity:1}}:root{--input-color:#99a3ba;--input-border:#cdd9ed;--input-background:#fff;--input-placeholder:#cbd1dc;--input-border-focus:#275efe;--group-color:var(--input-color);--group-border:var(--input-border);--group-background:#eef4ff;--group-color-focus:#fff;--group-border-focus:var(--input-border-focus);--group-background-focus:#678efe}.form-field{display:block;width:100%;padding:8px 16px;line-height:25px;font-size:14px;font-weight:500;font-family:inherit;border-radius:6px;-webkit-appearance:none;color:var(--input-color);border:1px solid var(--input-border);background:var(--input-background);transition:border .3s ease}.form-field::-moz-placeholder{color:var(--input-placeholder)}.form-field:-ms-input-placeholder{color:var(--input-placeholder)}.form-field::placeholder{color:var(--input-placeholder)}.form-field:focus{outline:0;border-color:var(--input-border-focus)}.form-group{position:relative;display:flex;width:100%}.form-group .form-field,.form-group>span{white-space:nowrap;display:block}.form-group .form-field:not(:first-child):not(:last-child),.form-group>span:not(:first-child):not(:last-child){border-radius:0}.form-group .form-field:first-child,.form-group>span:first-child{border-radius:6px 0 0 6px}.form-group .form-field:last-child,.form-group>span:last-child{border-radius:0 6px 6px 0}.form-group .form-field:not(:first-child),.form-group>span:not(:first-child){margin-left:-1px}.form-group .form-field{position:relative;z-index:1;flex:1 1 auto;width:1%;margin-top:0;margin-bottom:0}.form-group>span{text-align:center;padding:8px 12px;font-size:14px;line-height:25px;color:var(--group-color);background:var(--group-background);border:1px solid var(--group-border);transition:background .3s ease,border .3s ease,color .3s ease}.form-group:focus-within>span{color:var(--group-color-focus);background:var(--group-background-focus);border-color:var(--group-border-focus)}html{box-sizing:border-box;-webkit-font-smoothing:antialiased}*{box-sizing:inherit}:after,:before{box-sizing:inherit}body{min-height:100vh;font-family:\"Mukta Malar\",Arial;display:flex;padding-top:50px;align-items:center;flex-direction:column;background:#f5f9ff}@media (min-width:600px){body{min-height:100vh;font-family:\"Mukta Malar\",Arial;display:flex;justify-content:center;align-items:center;flex-direction:column;background:#f5f9ff}}body .form-group{max-width:500px}body .form-group:not(:last-child){margin-bottom:32px}button{position:relative;overflow:hidden;width:7rem;color:#5585ff;border:2px solid #5585ff;background-color:transparent;cursor:pointer;line-height:2;margin:0;padding:0;border-radius:6px;font-size:1.125rem;text-transform:lowercase;outline:0;transition:transform 125ms}button:active{transform:scale(.9,.9)}button:after,button:before{position:absolute;opacity:0;border-radius:50%;background-color:#fff;top:50%;left:50%;margin-top:-1.125rem;margin-left:-1.125rem;width:2.25rem;height:2.25rem;content:\"\";z-index:1}button.loading{animation:button-loading .5s forwards}button.loading:before{opacity:1;animation:button-dot-intro .5s forwards}button.loading:after{opacity:0;animation:button-dot-pulse 1.5s infinite .5s}button.ready{text-indent:0;color:transparent;background-color:#5585ff;animation:button-ready 333ms forwards}button.ready:before{position:absolute;left:0;right:0;top:auto;margin:0;width:auto;height:auto;border-radius:0;background-color:transparent;color:#8cce1e;content:\"success\";opacity:0;z-index:2;animation:button-ready-label .5s forwards 275ms}button.ready:after{opacity:1;animation:button-dot-outro 333ms}</style><div class=form-group><span>Blynk token</span> <input class=form-field id=token name=token placeholder=\"type here...\"style=margin-right:5px;min-width:250px></div><button onclick=submit_F(this) type=submit>Save</button><script>document.addEventListener(\"DOMContentLoaded\", function (event) {\r\n            var xhr = new XMLHttpRequest();\r\n            xhr.open('GET', '/token');\r\n            xhr.onload = function () {\r\n                if (xhr.status === 200) {\r\n                    let res = JSON.parse(xhr.responseText);\r\n                    document.getElementById('token').value = res.token;\r\n                }\r\n            };\r\n\r\n            // Send\r\n            xhr.send();\r\n        });\r\n\r\n        function submit_F(obj) {\r\n            obj.className = 'loading';\r\n            setTimeout(function () {\r\n                save();\r\n            }, 200);\r\n        }\r\n\r\n        function save() {\r\n            var xhr = new XMLHttpRequest();\r\n            xhr.open('POST', '/login');\r\n            // Set callback action\r\n            xhr.onload = function () {\r\n                if (xhr.status === 200) {\r\n                    document.querySelector('button').className = 'ready';\r\n                } else {\r\n                    document.querySelector('button').className = '';\r\n                    alert('Save failed!');\r\n                }\r\n            };\r\n\r\n            // Send\r\n            const formData = new FormData();\r\n            formData.append(\"token\", document.getElementById('token').value);\r\n            xhr.send(formData);\r\n        }</script>";
+  String html = "<!DOCTYPE html>\r\n<html>\r\n\r\n<head>\r\n    <meta charset=\"UTF-8\">\r\n    <meta name=\"viewport\" content=\"width=audo, initial-scale=1.0\"><title>Điều khiển thiết bị thông qua Blynk</title>\r\n    <style>\r\n        .form {\r\n            display: flex;\r\n            flex-direction: column;\r\n            align-items: center;\r\n            margin-top: 50px;\r\n        }\r\n\r\n        .form-group {\r\n            display: flex;\r\n            flex-direction: row;\r\n            align-items: center;\r\n            margin-bottom: 20px;\r\n        }\r\n\r\n        label {\r\n            text-align: left;\r\n            width: 100px;\r\n            /* Điều chỉnh kích thước label để các label có chiều rộng như nhau */\r\n            margin-right: 10px;\r\n        }\r\n\r\n        input[type=\"text\"],\r\n        input[type=\"password\"] {\r\n            padding: 10px;\r\n            border-radius: 5px;\r\n            border: none;\r\n            background-color: #f2f2f2;\r\n            width: 250px;\r\n        }\r\n\r\n        input[type=\"submit\"] {\r\n            background-color: #4CAF50;\r\n            color: white;\r\n            border-radius: 5px;\r\n            border: none;\r\n            padding: 10px;\r\n            width: 100px;\r\n            cursor: pointer;\r\n        }\r\n    </style>\r\n</head>\r\n\r\n<body>\r\n    <div class=\"form\">\r\n        <div class=\"form-group\">\r\n            \r\n            <input type=\"text\" id=\"user\" placeholder=\"Tên wifi\" >\r\n        </div>\r\n        <div class=\"form-group\">\r\n            \r\n            <input type=\"password\" id=\"password\" placeholder=\"Mật khẩu wifi\" >\r\n        </div>\r\n        <div class=\"form-group\">\r\n            \r\n            <input type=\"text\" id=\"token\" placeholder=\"Mã liên kết ứng dụng điều khiển\" >\r\n        </div>\r\n        <input onclick=\"save()\" type=\"submit\" value=\"Lưu thay đổi\">\r\n    </div>\r\n    <script>\r\n        document.addEventListener(\"DOMContentLoaded\", function (event) {\r\n            var xhr = new XMLHttpRequest();\r\n            xhr.open('GET', '/info');\r\n            xhr.onload = function () {\r\n                if (xhr.status === 200) {\r\n                    let res = JSON.parse(xhr.responseText);\r\n                    document.getElementById('token').value = res.token;\r\n                    document.getElementById('user').value = res.username;\r\n                    document.getElementById('password').value = res.pass;\r\n                }\r\n            };\r\n            // Send\r\n            xhr.send();\r\n        });\r\n        function save() {\r\n            var xhr = new XMLHttpRequest();\r\n            xhr.open('POST', '/save');\r\n\r\n            // Set callback action\r\n            xhr.onload = function () {\r\n                if (xhr.status === 200) {\r\n                    alert('Đã lưu thông tin!');\r\n                } else {\r\n                    alert('Lỗi, thử lại!');\r\n                }\r\n            };\r\n            // Send\r\n            const formData = new FormData();\r\n            formData.append(\"token\", document.getElementById('token').value);\r\n            formData.append(\"username\", document.getElementById('user').value);\r\n            formData.append(\"pass\", document.getElementById('password').value);\r\n            xhr.send(formData);\r\n        }\r\n    </script>\r\n</body>\r\n\r\n</html>";
   server.send(200, "text/html", html);
 }
 
-void handleLogin()
+/**
+ * API GET "/info"
+ * Get setting info
+ */
+void getConfigInfo()
+{
+  String myToken = preferences.getString("token", "undefined");
+  String username = preferences.getString("username", "undefined");
+  String pass = preferences.getString("pass", "undefined");
+  server.send(200, "application/json", "{\"token\": \"" + myToken + "\", \"username\": \"" + username + "\", \"pass\": \"" + pass + "\"}");
+}
+
+/**
+ * API GET "/save"
+ * Get setting info
+ */
+void saveConfigInfo()
 {
   String token = server.arg("token");
-  Serial.print("Input token: ");
-  Serial.println(token);
+  String username = server.arg("username");
+  String pass = server.arg("pass");
 
-  if (token.length() > 0)
+  if (token.length() > 0 && username.length() && pass.length())
   {
     preferences.putString("token", token);
-    leftConfigMode = true;
+    preferences.putString("username", username);
+    preferences.putString("pass", pass);
 
+    // Setting finish
+    settingFlg = true;
     server.send(200, "application/json", "{\"message\": \"success\"}");
+
+    // Reset
+    ESP.reset();
   }
   else
   {
@@ -236,31 +140,102 @@ void handleLogin()
   }
 }
 
-void handleGetToken()
+BLYNK_CONNECTED()
 {
-  // Get blynk token
-  String myToken = preferences.getString("token", "undefined");
-  server.send(200, "application/json", "{\"token\": \"" + myToken + "\"}");
+  Blynk.syncVirtual(V1, V2, V3);
 }
 
+BLYNK_WRITE(V1)
+{
+  if (param.asInt())
+  {
+    digitalWrite(device1, HIGH);
+    lastDevice1State = true;
+    Serial.println("Thiết bị 1 (D1) bật");
+
+    if (hasConnectedInternet)
+      Blynk.virtualWrite(V6, "Thiết bị 1 (D1) bật");
+  }
+  else
+  {
+    digitalWrite(device1, LOW);
+    lastDevice1State = false;
+    Serial.println("Thiết bị 1 (D1) tắt");
+
+    if (hasConnectedInternet)
+      Blynk.virtualWrite(V6, "Thiết bị 1 (D1) tắt");
+  }
+}
+
+BLYNK_WRITE(V2)
+{
+  if (param.asInt())
+  {
+    digitalWrite(device2, HIGH);
+    lastDevice2State = true;
+    Serial.println("Thiết bị 2 (D2) bật");
+
+    if (hasConnectedInternet)
+      Blynk.virtualWrite(V6, "Thiết bị 2 (D2) bật");
+  }
+  else
+  {
+    digitalWrite(device2, LOW);
+    lastDevice2State = false;
+    Serial.println("Thiết bị 2 (D2) tắt");
+
+    if (hasConnectedInternet)
+      Blynk.virtualWrite(V6, "Thiết bị 2 (D2) tắt");
+  }
+}
+
+BLYNK_WRITE(V3)
+{
+  if (param.asInt())
+  {
+    digitalWrite(device3, HIGH);
+    lastDevice3State = true;
+    Serial.println("Thiết bị 3 (D8) bật");
+
+    if (hasConnectedInternet)
+      Blynk.virtualWrite(V6, "Thiết bị 3 (D8) bật");
+  }
+  else
+  {
+    digitalWrite(device3, LOW);
+    lastDevice3State = false;
+    Serial.println("Thiết bị 3 (D8) tắt");
+
+    if (hasConnectedInternet)
+      Blynk.virtualWrite(V6, "Thiết bị 3 (D8) tắt");
+  }
+}
+
+/**
+ * Start a config app
+ */
 void setupInfomation()
 {
+  // Set flg false
+  settingFlg = false;
 
-  // Phát ra 1 mạng wifi
+  // Blink light
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(500);
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(1000);
+
+  // Create a sharepoint for config
   WiFi.mode(WIFI_AP);
-  WiFi.softAP("NodeMCU Access Point");
+  WiFi.softAP("Connect to setting infomation.");
 
   // Start the server
-  server.on("/", HTTP_GET, handleRoot);
-  server.on("/login", HTTP_POST, handleLogin);
-  server.on("/token", HTTP_GET, handleGetToken);
+  server.on("/", HTTP_GET, webHome);
+  server.on("/info", HTTP_GET, getConfigInfo);
+  server.on("/save", HTTP_POST, saveConfigInfo);
   server.begin();
 
-  Serial.print("Setting at IP: ");
-  Serial.println(WiFi.localIP());
-  leftConfigMode = false;
-  hasBkynkConfig = false;
-
+  int startTime = millis();
   while (true)
   {
     server.handleClient();
@@ -270,49 +245,384 @@ void setupInfomation()
     digitalWrite(LED_BUILTIN, HIGH);
     delay(1000);
 
-    // Back to main loop
-    if (leftConfigMode)
+    if (settingFlg)
+    {
       break;
+    }
+
+    // Tự thoát mode config sau 2p
+    if (millis() - startTime > 120000)
+    {
+
+      if (hasConnectedInternet)
+        Blynk.virtualWrite(V6, "Auto exit setup mode...");
+
+      ESP.reset(); // Thực hiện reset
+    }
   }
+}
+
+bool checkConnectWifi()
+{
+  String myToken = preferences.getString("token", "undefined");
+  String username = preferences.getString("username", "undefined");
+  String pass = preferences.getString("pass", "undefined");
+
+  Serial.println("Cache info: " + username + "/" + pass + "/" + myToken);
+
+  WiFi.begin(username, pass);
+
+  int tryNum = 0;
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(1000);
+    Serial.println("Try connect...");
+    tryNum++;
+
+    if (tryNum == 10)
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Try to connect Blynk
+ */
+void reconnectBlynk()
+{
+  // Disconect
+  Blynk.disconnect();
+
+  // Get blynk token
+  String myToken = preferences.getString("token", "undefined");
+  String username = preferences.getString("username", "undefined");
+  String pass = preferences.getString("pass", "undefined");
+
+  // Re connect
+  Blynk.begin(myToken.c_str(), WiFi.SSID().c_str(), WiFi.psk().c_str());
+}
+
+/**
+ * Config blynk infomation
+ */
+bool configBlynk()
+{
+
+  // Check connnect wifi
+  if (!checkConnectWifi())
+  {
+    return false;
+  }
+
+  // Get blynk token
+  String myToken = preferences.getString("token", "undefined");
+  String username = preferences.getString("username", "undefined");
+  String pass = preferences.getString("pass", "undefined");
+
+  // Show info
+  Serial.println(WiFi.localIP());
+
+  // Check connect wifi
+  hasConnectedToInternet();
+
+  // Start Blynk
+  if (hasConnectedInternet)
+    Blynk.begin(myToken.c_str(), WiFi.SSID().c_str(), WiFi.psk().c_str());
+
+  // Default set of led
+  digitalWrite(LED_BUILTIN, HIGH);
+
+  // Change state of 3 PIN to off
+  if (hasConnectedInternet)
+  {
+    // Blynk.virtualWrite(V3, LOW);
+    // Blynk.virtualWrite(V1, LOW);
+    // Blynk.virtualWrite(V2, LOW);
+  }
+
+  // Change status
+  bkynkSettingFlg = true;
+
+  return true;
+}
+
+void handleButton1()
+{
+  // Button was just pressed
+  int button1Input = digitalRead(button1);
+  if (button1Input == LOW && lastButton1State == HIGH)
+  {
+    lastDevice1State = !lastDevice1State;
+    if (lastDevice1State)
+    {
+      digitalWrite(device1, HIGH);
+
+      if (hasConnectedInternet && Blynk.connected())
+      {
+        Blynk.virtualWrite(V1, HIGH);
+        Blynk.virtualWrite(V6, "Thiết bị 1 (D1) bật");
+      }
+    }
+    else
+    {
+      digitalWrite(device1, LOW);
+
+      if (hasConnectedInternet && Blynk.connected())
+      {
+        Blynk.virtualWrite(V1, LOW);
+        Blynk.virtualWrite(V6, "Thiết bị 1 (D1) tắt");
+      }
+    }
+  }
+  lastButton1State = button1Input;
+}
+
+void handleButton2()
+{
+  // Button was just pressed
+  int button2Input = digitalRead(button2);
+  if (button2Input == LOW && lastButton2State == HIGH)
+  {
+    lastDevice2State = !lastDevice2State;
+    if (lastDevice2State)
+    {
+      digitalWrite(device2, HIGH);
+
+      if (hasConnectedInternet && Blynk.connected())
+      {
+        Blynk.virtualWrite(V2, HIGH);
+        Blynk.virtualWrite(V6, "Thiết bị 2 (D2) bật");
+      }
+    }
+    else
+    {
+      digitalWrite(device2, LOW);
+
+      if (hasConnectedInternet && Blynk.connected())
+      {
+        Blynk.virtualWrite(V2, LOW);
+        Blynk.virtualWrite(V6, "Thiết bị 2 (D2) tắt");
+      }
+    }
+  }
+  lastButton2State = button2Input;
+}
+
+void handleButton3()
+{
+  // Button was just pressed
+  int button3Input = digitalRead(button3);
+  if (button3Input == LOW && lastButton3State == HIGH)
+  {
+    lastDevice3State = !lastDevice3State;
+    if (lastDevice3State)
+    {
+      digitalWrite(device3, HIGH);
+
+      if (hasConnectedInternet)
+      {
+        Blynk.virtualWrite(V3, HIGH);
+        Blynk.virtualWrite(V6, "Thiết bị 3 (D8) bật");
+      }
+    }
+    else
+    {
+      digitalWrite(device3, LOW);
+
+      if (hasConnectedInternet)
+      {
+        Blynk.virtualWrite(V3, LOW);
+        Blynk.virtualWrite(V6, "Thiết bị 3 (D8) tắt");
+      }
+    }
+  }
+  lastButton3State = button3Input;
+}
+
+void handlePressButton()
+{
+  handleButton1();
+  handleButton2();
+  handleButton3();
+}
+
+void mainProcess()
+{
+  if (hasConnectedInternet)
+  {
+    Serial.println("Blynk run start...");
+    Blynk.run();
+    // Blynk.syncAll();
+    Serial.println("Blynk run end...");
+  }
+
+  handlePressButton();
+}
+
+void run()
+{
+  setupButtonState = digitalRead(buttonPin);
+
+  // Button was just pressed
+  if (setupButtonState == LOW && setUpLastButtonState == HIGH)
+  {
+    buttonPressTime = millis();
+    Serial.println("Presss button...");
+
+    if (hasConnectedInternet)
+      Blynk.virtualWrite(V6, "Presss button...");
+  }
+  else if ((setupButtonState == LOW && setUpLastButtonState == LOW) || !settingFlg)
+  {
+    // Button is being held down
+    if (millis() - buttonPressTime > 1500 || !settingFlg)
+    {
+      // Config user infomation
+      if (hasConnectedInternet)
+        Blynk.virtualWrite(V6, "Setup mode...");
+
+      Serial.println("Setup mode...");
+      setupInfomation();
+    }
+  }
+  else if (setupButtonState == HIGH && setUpLastButtonState == LOW)
+  {
+    // Button was just released
+  }
+  else
+  {
+    if (!bkynkSettingFlg)
+    {
+      if (configBlynk())
+      {
+        settingFlg = true;
+        Serial.println("Config successfully.");
+
+        if (hasConnectedInternet)
+          Blynk.virtualWrite(V6, "Đã thiết lập kết nối.");
+      }
+      else
+      {
+        settingFlg = false;
+        delay(10000);
+        return;
+      }
+    }
+
+    mainProcess();
+  }
+
+  // Remember the current button state for the next loop
+  setUpLastButtonState = setupButtonState;
+}
+
+void setup()
+{
+  Serial.begin(115200);
+
+  // Start cache object
+  preferences.begin("NODEMCU", false);
+
+  // Config PIN mode
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  // Confing device mode
+  pinMode(device1, OUTPUT);
+  pinMode(device2, OUTPUT);
+  pinMode(device3, OUTPUT);
+
+  // Confing device mode
+  pinMode(button1, INPUT_PULLUP);
+  pinMode(button2, INPUT_PULLUP);
+  pinMode(button3, INPUT_PULLUP);
+
+  // Check cache config infomation
+  String myToken = preferences.getString("token", "undefined");
+  String username = preferences.getString("username", "undefined");
+  String pass = preferences.getString("pass", "undefined");
+
+  // Pass setting info
+  if (myToken != "undefined" && username != "undefined" && pass != "undefined")
+  {
+    settingFlg = true;
+  }
+}
+
+void syncStatusDevice()
+{
+  int statusDevice1 = digitalRead(device1);
+  int statusDevice2 = digitalRead(device2);
+  int statusDevice3 = digitalRead(device3);
+
+  // Send device status to BLynk cloud
+  Blynk.virtualWrite(V1, statusDevice1);
+  Blynk.virtualWrite(V2, statusDevice2);
+  Blynk.virtualWrite(V3, statusDevice3);
 }
 
 void loop()
 {
-  buttonState = digitalRead(buttonPin);
+  // Serial.print("Running.../");
+  // Serial.print(hasConnectedInternet);
+  // Serial.print("/");
+  // Serial.print(lastConnectInternetStatus);
+  // Serial.print("/");
+  // Serial.println(Blynk.connected());
 
-  // Button was just pressed
-  if (buttonState == LOW && lastButtonState == HIGH)
+  run();
+
+  // Get time running
+  unsigned long currentMillis = millis();
+
+  // Check connect intenet
+  if (currentMillis - previousInteMillis > intervalInte)
   {
-    buttonPressTime = millis();
-  }
-  else if (buttonState == LOW && lastButtonState == LOW)
-  {
-    // Button is being held down
-    if (millis() - buttonPressTime > 1500)
+    // Turn on led
+    digitalWrite(LED_BUILTIN, LOW);
+    previousInteMillis = currentMillis;
+
+    // Get status connect
+    Serial.println("Check connect intenet...");
+    hasConnectedToInternet();
+
+    // Re-connect if fail
+    if (hasConnectedInternet && (!lastConnectInternetStatus || !Blynk.connected()))
     {
-      // Button has been held for more than 3 seconds
-      Serial.println("Flash button held down for more than 3 seconds.");
-      // Do something here
-      setupInfomation();
-    }
-  }
-  else if (buttonState == HIGH && lastButtonState == LOW)
-  {
-    // Button was just released
-    // Do something here if necessary
-    Serial.println("end setting.");
-  }
-  else
-  {
-    if (!hasBkynkConfig)
-    {
-      configBlynk();
-      Serial.println("Config complete.");
+      Serial.println("Re-connect to Blynk cloud...");
+      reconnectBlynk();
+      // syncStatusDevice();
+       Blynk.syncVirtual(V1, V2, V3);
     }
 
-    mainLoop();
+    // Set status last check connect
+    lastConnectInternetStatus = hasConnectedInternet;
+
+    // Turn off led
+    digitalWrite(LED_BUILTIN, HIGH);
   }
 
-  // Remember the current button state for the next loop
-  lastButtonState = buttonState;
+  // Send system data
+  int freeHeapKb = ESP.getFreeHeap() / 1024;
+
+  if (hasConnectedInternet)
+  {
+    Blynk.virtualWrite(V5, currentMillis / 1000);
+    Blynk.virtualWrite(V7, freeHeapKb);
+  }
+
+  // Check reset
+  if (currentMillis - previousMillis >= intervalNoti)
+  {
+    Blynk.virtualWrite(V6, "Tự khởi động lại sau 1p nữa.");
+  }
+
+  // Check reset
+  if ((currentMillis - previousMillis >= interval) || freeHeapKb <= 5)
+  {
+    Serial.println("Reset.");
+    ESP.reset(); // Thực hiện reset
+  }
 }
