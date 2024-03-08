@@ -1,4 +1,9 @@
+
+
 #include <Arduino.h>
+
+#define BLYNK_TEMPLATE_ID "TMPLT6qd46Ps"
+#define BLYNK_TEMPLATE_NAME "NodeMCU"
 
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
