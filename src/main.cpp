@@ -11,12 +11,14 @@
 #include <Preferences.h>
 #include <BlynkSimpleEsp8266.h>
 #include <ESP8266HTTPClient.h>
+#include <DNSServer.h>
 
 // Using for check config finished
 bool settingFlg = false;
 bool bkynkSettingFlg = false;
 bool lastConnectInternetStatus = true;
 bool hasConnectedInternet = false;
+bool hasNotifiResetTime = false;
 
 // Config button state
 const int buttonPin = D3;      // GPIO0 - D3
@@ -25,13 +27,13 @@ int setUpLastButtonState = 0;  // Previous state of the button
 unsigned long buttonPressTime; // Time the button was pressed
 
 // Config auto reset
-unsigned long previousMillis = 0;          // Biến lưu trữ thời điểm trước đó
-const long interval = 120 * 60 * 1000;     // Khoảng thời gian tính bằng miliseconds (2 giờ)
-const long intervalNoti = 119 * 60 * 1000; // Thời gian cảnh báo
+unsigned long previousMillis = 0;               // Biến lưu trữ thời điểm trước đó
+long interval = 2 * 60 * 60 * 1000;             // Default khoản thời gian tính bằng miliseconds (2 giờ)
+long intervalNotify = (2 * 60 - 1) * 60 * 1000; // Thời gian cảnh báo
 
 // Config check intenet
-unsigned long previousInteMillis = 0;
-const long intervalInte = 30000;
+unsigned long prevInternetCheckMillis = 0;
+const long intervalInternetCheck = 30000;
 
 // Device PIN
 int device1 = D1;
@@ -59,6 +61,7 @@ WiFiManager wifiManager;
 Preferences preferences;
 HTTPClient http;
 WiFiClient wifiClient;
+DNSServer dnsServer;
 
 /**
  * Check hasConnected to internet
@@ -100,7 +103,7 @@ bool hasConnectedToInternet()
  */
 void webHome()
 {
-  String html = "<!DOCTYPE html>\r\n<html>\r\n\r\n<head>\r\n    <meta charset=\"UTF-8\">\r\n    <meta name=\"viewport\" content=\"width=audo, initial-scale=1.0\"><title>Điều khiển thiết bị thông qua Blynk</title>\r\n    <style>\r\n        .form {\r\n            display: flex;\r\n            flex-direction: column;\r\n            align-items: center;\r\n            margin-top: 50px;\r\n        }\r\n\r\n        .form-group {\r\n            display: flex;\r\n            flex-direction: row;\r\n            align-items: center;\r\n            margin-bottom: 20px;\r\n        }\r\n\r\n        label {\r\n            text-align: left;\r\n            width: 100px;\r\n            /* Điều chỉnh kích thước label để các label có chiều rộng như nhau */\r\n            margin-right: 10px;\r\n        }\r\n\r\n        input[type=\"text\"],\r\n        input[type=\"password\"] {\r\n            padding: 10px;\r\n            border-radius: 5px;\r\n            border: none;\r\n            background-color: #f2f2f2;\r\n            width: 250px;\r\n        }\r\n\r\n        input[type=\"submit\"] {\r\n            background-color: #4CAF50;\r\n            color: white;\r\n            border-radius: 5px;\r\n            border: none;\r\n            padding: 10px;\r\n            width: 100px;\r\n            cursor: pointer;\r\n        }\r\n    </style>\r\n</head>\r\n\r\n<body>\r\n    <div class=\"form\">\r\n        <div class=\"form-group\">\r\n            \r\n            <input type=\"text\" id=\"user\" placeholder=\"Tên wifi\" >\r\n        </div>\r\n        <div class=\"form-group\">\r\n            \r\n            <input type=\"password\" id=\"password\" placeholder=\"Mật khẩu wifi\" >\r\n        </div>\r\n        <div class=\"form-group\">\r\n            \r\n            <input type=\"text\" id=\"token\" placeholder=\"Mã liên kết ứng dụng điều khiển\" >\r\n        </div>\r\n        <input onclick=\"save()\" type=\"submit\" value=\"Lưu thay đổi\">\r\n    </div>\r\n    <script>\r\n        document.addEventListener(\"DOMContentLoaded\", function (event) {\r\n            var xhr = new XMLHttpRequest();\r\n            xhr.open('GET', '/info');\r\n            xhr.onload = function () {\r\n                if (xhr.status === 200) {\r\n                    let res = JSON.parse(xhr.responseText);\r\n                    document.getElementById('token').value = res.token;\r\n                    document.getElementById('user').value = res.username;\r\n                    document.getElementById('password').value = res.pass;\r\n                }\r\n            };\r\n            // Send\r\n            xhr.send();\r\n        });\r\n        function save() {\r\n            var xhr = new XMLHttpRequest();\r\n            xhr.open('POST', '/save');\r\n\r\n            // Set callback action\r\n            xhr.onload = function () {\r\n                if (xhr.status === 200) {\r\n                    alert('Đã lưu thông tin!');\r\n                } else {\r\n                    alert('Lỗi, thử lại!');\r\n                }\r\n            };\r\n            // Send\r\n            const formData = new FormData();\r\n            formData.append(\"token\", document.getElementById('token').value);\r\n            formData.append(\"username\", document.getElementById('user').value);\r\n            formData.append(\"pass\", document.getElementById('password').value);\r\n            xhr.send(formData);\r\n        }\r\n    </script>\r\n</body>\r\n\r\n</html>";
+  String html = "<!DOCTYPE html>\r\n<html>\r\n\r\n<head>\r\n    <meta charset=\"UTF-8\">\r\n    <title>Điều khiển thiết bị thông qua Blynk</title>\r\n    <style>\r\n        .form {\r\n            display: flex;\r\n            flex-direction: column;\r\n            align-items: center;\r\n            margin-top: 50px;\r\n        }\r\n\r\n        .form-group {\r\n            display: flex;\r\n            flex-direction: row;\r\n            align-items: center;\r\n            margin-bottom: 20px;\r\n        }\r\n\r\n        label {\r\n            text-align: left;\r\n            width: 100px;\r\n            /* Điều chỉnh kích thước label để các label có chiều rộng như nhau */\r\n            margin-right: 10px;\r\n        }\r\n\r\n        input[type=\"text\"],\r\n        input[type=\"number\"],\r\n        input[type=\"password\"] {\r\n            padding: 10px;\r\n            border-radius: 5px;\r\n            border: none;\r\n            background-color: #f2f2f2;\r\n            width: 250px;\r\n        }\r\n\r\n        input[type=\"submit\"] {\r\n            background-color: #4CAF50;\r\n            color: white;\r\n            border-radius: 5px;\r\n            border: none;\r\n            padding: 10px;\r\n            width: 100px;\r\n            cursor: pointer;\r\n        }\r\n    </style>\r\n</head>\r\n\r\n<body>\r\n    <div class=\"form\">\r\n        <div class=\"form-group\">\r\n            <label for=\"user\">User</label>\r\n            <input type=\"text\" id=\"user\">\r\n        </div>\r\n        <div class=\"form-group\">\r\n            <label for=\"password\">Password</label>\r\n            <input type=\"password\" id=\"password\">\r\n        </div>\r\n        <div class=\"form-group\">\r\n            <label for=\"token\">Token</label>\r\n            <input type=\"text\" id=\"token\">\r\n        </div>\r\n        <div class=\"form-group\">\r\n            <label for=\"token\">Re-set time(h)</label>\r\n            <input type=\"number\" value=\"24\" id=\"resettime\">\r\n        </div>\r\n        <input onclick=\"save()\" type=\"submit\" value=\"Kết nối\">\r\n    </div>\r\n    <script>\r\n        document.addEventListener(\"DOMContentLoaded\", function (event) {\r\n            var xhr = new XMLHttpRequest();\r\n            xhr.open(\'GET\', \'/info\');\r\n            xhr.onload = function () {\r\n                if (xhr.status === 200) {\r\n                    let res = JSON.parse(xhr.responseText);\r\n                    document.getElementById(\'token\').value = res.token;\r\n                    document.getElementById(\'user\').value = res.username;\r\n                    document.getElementById(\'password\').value = res.pass;\r\n                    document.getElementById(\'resettime\').value = res.resettime;\r\n                }\r\n            };\r\n            // Send\r\n            xhr.send();\r\n        });\r\n        function save() {\r\n            var xhr = new XMLHttpRequest();\r\n            xhr.open(\'POST\', \'/save\');\r\n\r\n            // Set callback action\r\n            xhr.onload = function () {\r\n                if (xhr.status === 200) {\r\n                    alert(\'Đã lưu thông tin!\');\r\n                } else {\r\n                    alert(\'Lỗi, thử lại!\');\r\n                }\r\n            };\r\n\r\n            // Send\r\n            const formData = new FormData();\r\n            formData.append(\"token\", document.getElementById(\'token\').value);\r\n            formData.append(\"username\", document.getElementById(\'user\').value);\r\n            formData.append(\"pass\", document.getElementById(\'password\').value);\r\n            formData.append(\"resettime\", document.getElementById(\'resettime\').value);\r\n            xhr.send(formData);\r\n        }\r\n    </script>\r\n</body>\r\n\r\n</html>";
   server.send(200, "text/html", html);
 }
 
@@ -113,7 +116,8 @@ void getConfigInfo()
   String myToken = preferences.getString("token", "undefined");
   String username = preferences.getString("username", "undefined");
   String pass = preferences.getString("pass", "undefined");
-  server.send(200, "application/json", "{\"token\": \"" + myToken + "\", \"username\": \"" + username + "\", \"pass\": \"" + pass + "\"}");
+  String resettime = preferences.getString("resettime", "undefined");
+  server.send(200, "application/json", "{\"token\": \"" + myToken + "\", \"username\": \"" + username + "\", \"pass\": \"" + pass + "\", \"resettime\": \"" + resettime + "\"}");
 }
 
 /**
@@ -125,16 +129,21 @@ void saveConfigInfo()
   String token = server.arg("token");
   String username = server.arg("username");
   String pass = server.arg("pass");
+  String resettime = server.arg("resettime");
 
   if (token.length() > 0 && username.length() && pass.length())
   {
     preferences.putString("token", token);
     preferences.putString("username", username);
     preferences.putString("pass", pass);
+    preferences.putString("resettime", resettime);
 
     // Setting finish
     settingFlg = true;
     server.send(200, "application/json", "{\"message\": \"success\"}");
+
+    // Delay 1s before reset
+    delay(1000);
 
     // Reset
     ESP.reset();
@@ -156,7 +165,6 @@ BLYNK_WRITE(V1)
   {
     digitalWrite(device1, HIGH);
     lastDevice1State = true;
-    Serial.println("Thiết bị 1 (D1) bật");
 
     if (hasConnectedInternet)
       Blynk.virtualWrite(V6, "Thiết bị 1 (D1) bật");
@@ -165,7 +173,6 @@ BLYNK_WRITE(V1)
   {
     digitalWrite(device1, LOW);
     lastDevice1State = false;
-    Serial.println("Thiết bị 1 (D1) tắt");
 
     if (hasConnectedInternet)
       Blynk.virtualWrite(V6, "Thiết bị 1 (D1) tắt");
@@ -178,7 +185,6 @@ BLYNK_WRITE(V2)
   {
     digitalWrite(device2, HIGH);
     lastDevice2State = true;
-    Serial.println("Thiết bị 2 (D2) bật");
 
     if (hasConnectedInternet)
       Blynk.virtualWrite(V6, "Thiết bị 2 (D2) bật");
@@ -187,7 +193,6 @@ BLYNK_WRITE(V2)
   {
     digitalWrite(device2, LOW);
     lastDevice2State = false;
-    Serial.println("Thiết bị 2 (D2) tắt");
 
     if (hasConnectedInternet)
       Blynk.virtualWrite(V6, "Thiết bị 2 (D2) tắt");
@@ -200,7 +205,6 @@ BLYNK_WRITE(V3)
   {
     digitalWrite(device3, HIGH);
     lastDevice3State = true;
-    Serial.println("Thiết bị 3 (D8) bật");
 
     if (hasConnectedInternet)
       Blynk.virtualWrite(V6, "Thiết bị 3 (D8) bật");
@@ -209,7 +213,6 @@ BLYNK_WRITE(V3)
   {
     digitalWrite(device3, LOW);
     lastDevice3State = false;
-    Serial.println("Thiết bị 3 (D8) tắt");
 
     if (hasConnectedInternet)
       Blynk.virtualWrite(V6, "Thiết bị 3 (D8) tắt");
@@ -326,6 +329,11 @@ bool configBlynk()
   String myToken = preferences.getString("token", "undefined");
   String username = preferences.getString("username", "undefined");
   String pass = preferences.getString("pass", "undefined");
+  String resettime = preferences.getString("resettime", "undefined");
+
+  // Set reset time
+  interval = resettime.toInt() * 60 * 60 * 1000;             // Default khoản thời gian tính bằng miliseconds (2 giờ)
+  intervalNotify = (resettime.toInt() * 60 - 1) * 60 * 1000; // Thời gian cảnh báo
 
   // Show info
   Serial.println(WiFi.localIP());
@@ -346,6 +354,9 @@ bool configBlynk()
     // Blynk.virtualWrite(V3, LOW);
     // Blynk.virtualWrite(V1, LOW);
     // Blynk.virtualWrite(V2, LOW);
+    int minute = resettime.toInt() * 60;
+    String msg = "Has connected (Next " + String(minute) + " minute).";
+    Blynk.virtualWrite(V6, msg);
   }
 
   // Change status
@@ -458,10 +469,7 @@ void mainProcess()
 {
   if (hasConnectedInternet)
   {
-    Serial.println("Blynk run start...");
     Blynk.run();
-    // Blynk.syncAll();
-    Serial.println("Blynk run end...");
   }
 
   handlePressButton();
@@ -505,9 +513,6 @@ void run()
       {
         settingFlg = true;
         Serial.println("Config successfully.");
-
-        if (hasConnectedInternet)
-          Blynk.virtualWrite(V6, "Đã thiết lập kết nối.");
       }
       else
       {
@@ -580,14 +585,14 @@ void loop()
   run();
 
   // Get time running
-  unsigned long currentMillis = millis();
+  unsigned long currentInternetCheckMillis = millis();
 
-  // Check connect intenet
-  if (currentMillis - previousInteMillis > intervalInte)
+  // Check connect intenet (If than intervalInternetCheck (30s))
+  if (currentInternetCheckMillis - prevInternetCheckMillis > intervalInternetCheck)
   {
     // Turn on led
     digitalWrite(LED_BUILTIN, LOW);
-    previousInteMillis = currentMillis;
+    prevInternetCheckMillis = currentInternetCheckMillis;
 
     // Get status connect
     Serial.println("Check connect intenet...");
@@ -599,7 +604,7 @@ void loop()
       Serial.println("Re-connect to Blynk cloud...");
       reconnectBlynk();
       // syncStatusDevice();
-       Blynk.syncVirtual(V1, V2, V3);
+      Blynk.syncVirtual(V1, V2, V3);
     }
 
     // Set status last check connect
@@ -614,20 +619,23 @@ void loop()
 
   if (hasConnectedInternet)
   {
-    Blynk.virtualWrite(V5, currentMillis / 1000);
+    Blynk.virtualWrite(V5, currentInternetCheckMillis / 1000);
     Blynk.virtualWrite(V7, freeHeapKb);
   }
 
   // Check reset
-  if (currentMillis - previousMillis >= intervalNoti)
+  if (currentInternetCheckMillis - previousMillis >= intervalNotify &&
+      !hasNotifiResetTime)
   {
+    hasNotifiResetTime = true;
     Blynk.virtualWrite(V6, "Tự khởi động lại sau 1p nữa.");
   }
 
   // Check reset
-  if ((currentMillis - previousMillis >= interval) || freeHeapKb <= 5)
+  if ((currentInternetCheckMillis - previousMillis >= interval) || freeHeapKb <= 5)
   {
     Serial.println("Reset.");
+    Blynk.virtualWrite(V6, "Reseting...");
     ESP.reset(); // Thực hiện reset
   }
 }
